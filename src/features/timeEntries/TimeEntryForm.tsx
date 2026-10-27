@@ -1,10 +1,11 @@
 import { useEffect, useId, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { useSaveTimeEntry } from '../../api/hooks';
 import type { TimeEntry } from '../../api/types';
-import { addMinutes, combineLocal, toDateInput, toTimeInput, timeZoneName } from '../../lib/time';
 import { ErrorNotice } from '../../components/Feedback';
-import { DayStrip } from './DayStrip';
+import { useTaskDirectory } from '../../lib/taskDirectory';
+import { formatMinutes } from '../../lib/timeParse';
 import { TaskPicker } from './TaskPicker';
+import { WhenInput } from './WhenInput';
 import { COMMENT_MAX, defaultValues, validate, valuesFromEntry, type EntryFormValues } from './entryForm';
 
 export type FormMode = { kind: 'create'; taskId?: number } | { kind: 'edit'; entry: TimeEntry };
@@ -16,15 +17,6 @@ interface Props {
   onDirtyChange: (dirty: boolean) => void;
 }
 
-const QUICK = [
-  { label: '15m', min: 15 },
-  { label: '30m', min: 30 },
-  { label: '1h', min: 60 },
-  { label: '2h', min: 120 },
-  { label: '4h', min: 240 },
-  { label: '8h', min: 480 },
-];
-
 export function TimeEntryForm({ mode, onSaved, onCancel, onDirtyChange }: Props) {
   const initial = useMemo<EntryFormValues>(
     () => (mode.kind === 'edit' ? valuesFromEntry(mode.entry) : defaultValues(mode.taskId ?? null)),
@@ -35,11 +27,15 @@ export function TimeEntryForm({ mode, onSaved, onCancel, onDirtyChange }: Props)
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const save = useSaveTimeEntry();
   const commentRef = useRef<HTMLTextAreaElement>(null);
+  const directory = useTaskDirectory();
   const id = useId();
+  // Note: the API uses 0 as a real entry ID, so always compare against undefined.
   const editId = mode.kind === 'edit' ? mode.entry.id : undefined;
+  const isEdit = editId !== undefined;
 
   const result = validate(values);
   const show = (f: keyof typeof result.errors) => (submitted || touched[f] ? result.errors[f] : undefined);
+  const timeError = submitted || touched.time ? (result.errors.date ?? result.errors.startTime ?? result.errors.endTime) : undefined;
 
   useEffect(() => {
     onDirtyChange(JSON.stringify(values) !== JSON.stringify(initial));
@@ -51,15 +47,6 @@ export function TimeEntryForm({ mode, onSaved, onCancel, onDirtyChange }: Props)
   };
   const touch = (f: string) => setTouched((t) => ({ ...t, [f]: true }));
 
-  const applyDuration = (minutes: number) => {
-    const start = combineLocal(values.date, values.startTime);
-    if (!start) return;
-    const end = addMinutes(start, minutes);
-    set({ endTime: toTimeInput(end), endDate: null });
-  };
-
-  const isToday = values.date === toDateInput(new Date());
-
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
     setSubmitted(true);
@@ -69,13 +56,16 @@ export function TimeEntryForm({ mode, onSaved, onCancel, onDirtyChange }: Props)
     }
     save.mutate(
       { id: editId, input: result.input },
-      { onSuccess: (entry) => onSaved(entry, editId ? 'updated' : 'created') },
+      { onSuccess: (entry) => onSaved(entry, isEdit ? 'updated' : 'created') },
     );
   };
 
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
   };
+
+  const minutes = result.range ? Math.round((result.range.end.getTime() - result.range.start.getTime()) / 60_000) : 0;
+  const taskName = values.taskId != null ? directory[values.taskId]?.taskName : undefined;
 
   return (
     <form className="entry-form" onSubmit={submit} onKeyDown={onKeyDown} noValidate>
@@ -86,94 +76,18 @@ export function TimeEntryForm({ mode, onSaved, onCancel, onDirtyChange }: Props)
 
       <fieldset className="entry-form__section">
         <legend>When?</legend>
-        <div className="time-grid">
-          <div className="field">
-            <label htmlFor={`${id}-date`}>{values.endDate ? 'Start date' : 'Date'}</label>
-            <input
-              id={`${id}-date`}
-              type="date"
-              className="input"
-              value={values.date}
-              onChange={(e) => set({ date: e.target.value })}
-              onBlur={() => touch('date')}
-              aria-invalid={!!show('date')}
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor={`${id}-start`}>Start</label>
-            <input
-              id={`${id}-start`}
-              type="time"
-              className="input"
-              value={values.startTime}
-              onChange={(e) => set({ startTime: e.target.value })}
-              onBlur={() => touch('startTime')}
-              aria-invalid={!!show('startTime')}
-              required
-            />
-          </div>
-          {values.endDate && (
-            <div className="field">
-              <label htmlFor={`${id}-enddate`}>End date</label>
-              <input
-                id={`${id}-enddate`}
-                type="date"
-                className="input"
-                value={values.endDate}
-                onChange={(e) => set({ endDate: e.target.value || null })}
-              />
-            </div>
-          )}
-          <div className="field">
-            <label htmlFor={`${id}-end`}>End</label>
-            <input
-              id={`${id}-end`}
-              type="time"
-              className="input"
-              value={values.endTime}
-              onChange={(e) => set({ endTime: e.target.value })}
-              onBlur={() => touch('endTime')}
-              aria-invalid={!!show('endTime')}
-              aria-describedby={`${id}-time-err`}
-              required
-            />
-          </div>
-        </div>
-        <div id={`${id}-time-err`}>
-          {(show('date') || show('startTime') || show('endTime')) && (
-            <p className="field-error">{show('date') ?? show('startTime') ?? show('endTime')}</p>
-          )}
-        </div>
-
-        <div className="quick" role="group" aria-label="Set duration from start">
-          <span className="quick__label">Duration</span>
-          {QUICK.map((q) => (
-            <button key={q.min} type="button" className="chip" onClick={() => applyDuration(q.min)}>
-              {q.label}
-            </button>
-          ))}
-          {isToday && !values.endDate && (
-            <button type="button" className="chip" onClick={() => set({ endTime: toTimeInput(new Date()) })}>
-              Until now
-            </button>
-          )}
-        </div>
-
-        <DayStrip range={result.range} />
-
-        <div className="entry-form__tz">
-          Times are in your time zone ({timeZoneName()}).{' '}
-          {!values.endDate ? (
-            <button type="button" className="link" onClick={() => set({ endDate: values.date })}>
-              Ends on another day?
-            </button>
-          ) : (
-            <button type="button" className="link" onClick={() => set({ endDate: null })}>
-              Use a single date
-            </button>
-          )}
-        </div>
+        <WhenInput
+          date={values.date}
+          startTime={values.startTime}
+          endTime={values.endTime}
+          endDate={values.endDate}
+          range={result.range}
+          error={timeError}
+          onChange={(patch) => {
+            set(patch);
+            touch('time');
+          }}
+        />
       </fieldset>
 
       <fieldset className="entry-form__section">
@@ -215,11 +129,21 @@ export function TimeEntryForm({ mode, onSaved, onCancel, onDirtyChange }: Props)
       {save.isError && <ErrorNotice error={save.error} entryId={editId} />}
 
       <div className="entry-form__actions">
+        <div className="entry-form__total" aria-live="polite">
+          {minutes > 0 ? (
+            <>
+              <strong>{formatMinutes(minutes)}</strong>
+              <span className="muted">{taskName ? ` on ${taskName}` : ' to log'}</span>
+            </>
+          ) : (
+            <span className="muted">No time set yet</span>
+          )}
+        </div>
         <button type="button" className="btn btn--ghost" onClick={onCancel}>
           Cancel
         </button>
         <button type="submit" className="btn btn--primary" disabled={save.isPending}>
-          {save.isPending ? 'Saving…' : editId ? 'Save changes' : 'Create entry'}
+          {save.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Create entry'}
         </button>
       </div>
       <p className="entry-form__shortcut muted">

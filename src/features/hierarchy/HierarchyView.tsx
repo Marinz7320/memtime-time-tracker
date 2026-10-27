@@ -5,6 +5,7 @@ import { queryKeys } from '../../api/endpoints';
 import type { Client, Project, Task } from '../../api/types';
 import { buildTaskTree, countTasks, type TaskNode } from '../../lib/taskTree';
 import { EmptyState, ErrorNotice, Spinner, StatusBadge } from '../../components/Feedback';
+import { ClientEffort } from '../insights/ClientEffort';
 
 interface Props {
   onLogTime: (taskId: number) => void;
@@ -87,36 +88,43 @@ export function HierarchyView({ onLogTime }: Props) {
         </div>
       </header>
 
-      {q && (
-        <p className="hint">Search covers everything loaded so far. Use Expand all to search every project and task.</p>
-      )}
+      <div className="clients-layout">
+        <div className="clients-layout__main">
+          {q && (
+            <p className="hint">Search covers everything loaded so far. Use Expand all to search every project and task.</p>
+          )}
 
-      {clients.isPending ? (
-        <div className="loading-row">
-          <Spinner /> Loading clients…
+          {clients.isPending ? (
+            <div className="loading-row">
+              <Spinner /> Loading clients…
+            </div>
+          ) : clients.isError ? (
+            <ErrorNotice error={clients.error} onRetry={() => clients.refetch()} />
+          ) : !clients.data.length ? (
+            <EmptyState title="No clients yet">Clients created in your account will appear here.</EmptyState>
+          ) : !visibleClients.length ? (
+            <EmptyState title={`Nothing matches “${query}”`}>Try another name, or expand all to search deeper.</EmptyState>
+          ) : (
+            <ul className="tree" role="tree" aria-label="Clients, projects and tasks">
+              {visibleClients.map((c) => (
+                <ClientNode
+                  key={c.id}
+                  client={c}
+                  expanded={expanded}
+                  toggle={toggle}
+                  expandKeys={expandKeys}
+                  expandAllRequest={expandAllRequest}
+                  q={q}
+                  onLogTime={onLogTime}
+                />
+              ))}
+            </ul>
+          )}
         </div>
-      ) : clients.isError ? (
-        <ErrorNotice error={clients.error} onRetry={() => clients.refetch()} />
-      ) : !clients.data.length ? (
-        <EmptyState title="No clients yet">Clients created in your account will appear here.</EmptyState>
-      ) : !visibleClients.length ? (
-        <EmptyState title={`Nothing matches “${query}”`}>Try another name, or expand all to search deeper.</EmptyState>
-      ) : (
-        <ul className="tree" role="tree" aria-label="Clients, projects and tasks">
-          {visibleClients.map((c) => (
-            <ClientNode
-              key={c.id}
-              client={c}
-              expanded={expanded}
-              toggle={toggle}
-              expandKeys={expandKeys}
-              expandAllRequest={expandAllRequest}
-              q={q}
-              onLogTime={onLogTime}
-            />
-          ))}
-        </ul>
-      )}
+        <aside className="clients-layout__side">
+          <ClientEffort />
+        </aside>
+      </div>
     </section>
   );
 }
@@ -251,7 +259,7 @@ function TaskItem({ node, q, onLogTime }: { node: TaskNode; q: string; onLogTime
   if (q && !subtreeMatches(node, q)) return null;
   const { task } = node;
   const childQ = q && hit(task.name, q) ? '' : q;
-  const inactive = task.status !== 'active';
+  const inactive = task.status === 'completed' || task.status === 'inactive';
   return (
     <li role="treeitem" className={`tree__item tree__item--task${inactive ? ' is-inactive' : ''}`}>
       <div className="tree__row tree__row--task">

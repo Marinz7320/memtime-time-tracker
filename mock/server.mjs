@@ -14,10 +14,10 @@ const stamp = { createdAt: '2025-01-15T10:30:00.000Z', updatedAt: '2025-01-15T10
 const clients = [
   { id: 1, name: 'Acme Corp', description: 'Industrial supplies', status: 'active', ...stamp },
   { id: 2, name: 'Globex', description: 'Energy and utilities', status: 'active', ...stamp },
-  { id: 3, name: 'Initech', description: 'Legacy contract', status: 'inactive', ...stamp },
+  { id: 3, name: 'Initech', description: 'Legacy contract', status: 'completed', ...stamp },
 ];
 const projects = [
-  { id: 1, clientId: 1, name: 'Website redesign', status: 'active', ...stamp },
+  { id: 1, clientId: 1, name: 'Website redesign', status: 'in-progress', ...stamp },
   { id: 2, clientId: 1, name: 'Mobile app', status: 'active', ...stamp },
   { id: 3, clientId: 2, name: 'Billing migration', status: 'active', ...stamp },
 ];
@@ -28,14 +28,15 @@ const projectTasks = {
     { id: 3, parent: 1, name: 'Checkout', status: 'active', ...stamp },
     { id: 4, parent: 0, name: 'Frontend build', status: 'active', ...stamp },
   ],
-  2: [{ id: 5, parent: 0, name: 'Push notifications', status: 'inactive', ...stamp }],
+  2: [{ id: 5, name: 'Push notifications', status: 'completed', ...stamp }],
   3: [
-    { id: 6, parent: 0, name: 'Data mapping', status: 'active', ...stamp },
+    { id: 6, name: 'Data mapping', status: 'pending', ...stamp },
     { id: 7, parent: 0, name: 'Cut-over plan', status: 'active', ...stamp },
   ],
 };
 let entries = [];
-let nextId = 1;
+// The live API starts entry IDs at 0, so the mock does too.
+let nextId = 0;
 for (let d = 0; d < 14; d++) {
   const day = new Date();
   day.setDate(day.getDate() - d);

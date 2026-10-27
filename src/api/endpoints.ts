@@ -21,7 +21,10 @@ export async function fetchAll<T>(
   return all;
 }
 
-const byName: PageParams = { sortBy: 'name', order: 'asc' };
+/** "Client 2" before "Client 10", locale-aware. */
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+export const sortByName = <T extends { name: string }>(items: T[]): T[] =>
+  [...items].sort((a, b) => collator.compare(a.name, b.name));
 
 export const api = {
   listClients: (p: PageParams = {}) => request<Client[]>('/clients', { query: { ...p } }),
@@ -40,9 +43,9 @@ export const api = {
   deleteTimeEntry: (id: number) =>
     request<{ message: string }>(`/time-entries/${id}`, { method: 'DELETE' }),
 
-  allClients: () => fetchAll((p) => api.listClients(p), byName),
-  allProjects: (clientId: number) => fetchAll((p) => api.listProjects(clientId, p), byName),
-  allTasks: (projectId: number) => fetchAll((p) => api.listTasks(projectId, p), byName),
+  allClients: async () => sortByName(await fetchAll((p) => api.listClients(p))),
+  allProjects: async (clientId: number) => sortByName(await fetchAll((p) => api.listProjects(clientId, p))),
+  allTasks: async (projectId: number) => sortByName(await fetchAll((p) => api.listTasks(projectId, p))),
 };
 
 export const queryKeys = {

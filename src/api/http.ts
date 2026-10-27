@@ -131,8 +131,8 @@ export function describeError(err: unknown, context?: { entryId?: number }): Err
       };
     case err.status === 404:
       return {
-        title: context?.entryId ? `Time entry #${context.entryId} not found` : 'Not found',
-        detail: context?.entryId
+        title: context?.entryId !== undefined ? `Time entry #${context.entryId} not found` : 'Not found',
+        detail: context?.entryId !== undefined
           ? 'It may have been deleted, or it belongs to another user.'
           : msg,
       };

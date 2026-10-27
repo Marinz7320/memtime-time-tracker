@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TimeEntry } from './api/types';
 import { Drawer } from './components/Drawer';
 import { RateLimitBanner } from './components/RateLimitBanner';
+import { ScrollJump } from './components/ScrollJump';
 import { useToast } from './components/Toasts';
 import { HierarchyView } from './features/hierarchy/HierarchyView';
 import { TimeEntriesView } from './features/timeEntries/TimeEntriesView';
@@ -129,6 +130,8 @@ export default function App() {
           <HierarchyView onLogTime={(taskId) => openForm({ kind: 'create', taskId })} />
         )}
       </main>
+
+      <ScrollJump />
 
       <Drawer
         open={!!form}

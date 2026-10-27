@@ -114,3 +114,21 @@ describe('entry form validation', () => {
     }
   });
 });
+
+describe('name sorting', async () => {
+  const { sortByName } = await import('../api/endpoints');
+  it('orders numbers naturally', () => {
+    const names = ['Client 100', 'Client 51', 'Client 2', 'Client 10', 'client 1'];
+    expect(sortByName(names.map((name) => ({ name }))).map((x) => x.name)).toEqual([
+      'client 1',
+      'Client 2',
+      'Client 10',
+      'Client 51',
+      'Client 100',
+    ]);
+  });
+  it('treats a missing parent as a top-level task', () => {
+    const t = { id: 9, name: 'x', status: 'pending', createdAt: '', updatedAt: '' };
+    expect(buildTaskTree([t, { ...t, id: 10, parent: null }])).toHaveLength(2);
+  });
+});

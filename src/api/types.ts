@@ -20,8 +20,8 @@ export interface Project {
 
 export interface Task {
   id: number;
-  /** Parent task id; 0 means top-level task within the project. */
-  parent: number;
+  /** Parent task id; 0 (or absent, as the live API returns) means a top-level task. */
+  parent?: number | null;
   name: string;
   status: Status;
   createdAt: string;

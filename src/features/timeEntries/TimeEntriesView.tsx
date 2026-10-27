@@ -105,9 +105,6 @@ export function TimeEntriesView({ onEdit, onNew, highlightId }: Props) {
         </div>
         <div className="toolbar">
           <OpenById onFound={onEdit} />
-          <button className="btn btn--primary" onClick={onNew}>
-            New entry
-          </button>
         </div>
       </header>
 
@@ -162,13 +159,17 @@ export function TimeEntriesView({ onEdit, onNew, highlightId }: Props) {
                       <td>
                         <div className="cell-task">
                           <span>{info ? info.taskName : `Task #${e.taskId}`}</span>
-                          <small className="muted">
-                            {info ? `#${e.taskId}, ${info.clientName} / ${info.projectName}` : 'Name not loaded yet'}
-                          </small>
+                          {info && (
+                            <small className="muted">
+                              #{e.taskId}, {info.clientName} / {info.projectName}
+                            </small>
+                          )}
                         </div>
                       </td>
-                      <td className="cell-comment" title={e.comment}>
-                        {e.comment || <span className="muted">No comment</span>}
+                      <td title={e.comment}>
+                        <div className="cell-comment">
+                          {e.comment || <span className="muted">No comment</span>}
+                        </div>
                       </td>
                       <td className="nowrap">{formatDateTime(e.start)}</td>
                       <td className="nowrap">
@@ -256,7 +257,7 @@ function OpenById({ onFound }: { onFound: (e: TimeEntry) => void }) {
   const submit = async (ev: FormEvent) => {
     ev.preventDefault();
     const id = Number(value);
-    if (!Number.isInteger(id) || id <= 0) {
+    if (value === '' || !Number.isInteger(id) || id < 0) {
       setError('Enter a whole number, like 42.');
       return;
     }

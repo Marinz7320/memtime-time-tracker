@@ -42,6 +42,7 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
 }
 
 export function StatusBadge({ status }: { status: string }) {
-  if (status === 'active') return null;
-  return <span className="badge">{status}</span>;
+  if (!status) return null;
+  const label = status.replace(/[-_]/g, ' ');
+  return <span className={`badge badge--${status.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}`}>{label}</span>;
 }

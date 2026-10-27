@@ -89,9 +89,8 @@ export function TaskPicker({ value, onChange, error }: Props) {
         >
           <option value="">{clients.isPending ? 'Loading clients…' : 'Choose a client'}</option>
           {clients.data?.map((c) => (
-            <option key={c.id} value={c.id} disabled={c.status !== 'active'}>
+            <option key={c.id} value={c.id}>
               {c.name}
-              {c.status !== 'active' ? ` (${c.status})` : ''}
             </option>
           ))}
         </select>
@@ -113,9 +112,8 @@ export function TaskPicker({ value, onChange, error }: Props) {
             {!clientId ? 'Choose a client first' : projects.isPending ? 'Loading projects…' : projects.data?.length ? 'Choose a project' : 'No projects for this client'}
           </option>
           {projects.data?.map((p) => (
-            <option key={p.id} value={p.id} disabled={p.status !== 'active'}>
+            <option key={p.id} value={p.id}>
               {p.name}
-              {p.status !== 'active' ? ` (${p.status})` : ''}
             </option>
           ))}
         </select>
@@ -140,10 +138,9 @@ export function TaskPicker({ value, onChange, error }: Props) {
             {!project ? 'Choose a project first' : tasks.isPending ? 'Loading tasks…' : options.length ? 'Choose a task' : 'No tasks in this project'}
           </option>
           {options.map(({ task, depth }) => (
-            <option key={task.id} value={task.id} disabled={task.status !== 'active'}>
+            <option key={task.id} value={task.id}>
               {' '.repeat(depth)}
               {task.name}
-              {task.status !== 'active' ? ` (${task.status})` : ''}
             </option>
           ))}
         </select>

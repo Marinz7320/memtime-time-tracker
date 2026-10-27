@@ -78,7 +78,7 @@ describe('Time tracker', () => {
     expect((screen.getByRole('button', { name: 'Next' }) as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.click(screen.getByRole('button', { name: /^ID/ }));
-    await waitFor(() => expect(within(rows()[0]!).getAllByRole('cell')[0]!.textContent).toBe('1'), T);
+    await waitFor(() => expect(within(rows()[0]!).getAllByRole('cell')[0]!.textContent).toBe('0'), T);
     unmount();
   });
 
@@ -115,7 +115,7 @@ describe('Time tracker', () => {
     fireEvent.click(screen.getByRole('button', { name: '1h' }));
     fireEvent.click(screen.getByRole('button', { name: 'Create entry' }));
 
-    expect(await screen.findByText(/Time entry #15 created/, {}, T)).toBeTruthy();
+    expect(await screen.findByText(/Time entry #14 created/, {}, T)).toBeTruthy();
     expect(screen.getByText(/Checkout, .*\(1h 00m\)/)).toBeTruthy();
     unmount();
   });
@@ -125,13 +125,32 @@ describe('Time tracker', () => {
     await screen.findByText('Showing 1–10', {}, T);
     const row = screen.getByText('Seeded entry 2').closest('tr')!;
     fireEvent.click(within(row).getByRole('button', { name: 'Edit' }));
-    expect(await screen.findByText(/Edit time entry #2/)).toBeTruthy();
+    expect(await screen.findByText(/Edit time entry #1/)).toBeTruthy();
     const comment = screen.getByLabelText('Comment');
     expect((comment as HTMLTextAreaElement).value).toBe('Seeded entry 2');
     fireEvent.change(comment, { target: { value: 'Seeded entry 2, revised' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
-    expect(await screen.findByText('Time entry #2 updated', {}, T)).toBeTruthy();
+    expect(await screen.findByText('Time entry #1 updated', {}, T)).toBeTruthy();
     expect(screen.getByText(/“Seeded entry 2, revised”/)).toBeTruthy();
+    unmount();
+  });
+
+  it('updates entry #0 instead of creating a new one (the API uses 0 as an ID)', async () => {
+    const { unmount } = renderApp();
+    await screen.findByText('Showing 1–10', {}, T);
+    fireEvent.click(within(screen.getByText('Seeded entry 1').closest('tr')!).getByRole('button', { name: 'Edit' }));
+    expect(await screen.findByRole('button', { name: 'Save changes' })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Comment'), { target: { value: 'Entry zero, edited' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    expect(await screen.findByText('Time entry #0 updated', {}, T)).toBeTruthy();
+    unmount();
+  });
+
+  it('opens entry #0 by ID', async () => {
+    const { unmount } = renderApp();
+    fireEvent.change(await screen.findByPlaceholderText('Entry ID'), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }));
+    expect(await screen.findByText(/Edit time entry #0/, {}, T)).toBeTruthy();
     unmount();
   });
 
