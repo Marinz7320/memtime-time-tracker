@@ -11,20 +11,30 @@ const FETCH_ALL_MAX_PAGES = 20;
 export async function fetchAll<T>(
   fetchPage: (params: PageParams) => Promise<T[]>,
   base: PageParams = {},
+  onPage?: OnPage<T>,
 ): Promise<T[]> {
   const all: T[] = [];
   for (let page = 0; page < FETCH_ALL_MAX_PAGES; page++) {
     const items = await fetchPage({ ...base, limit: FETCH_ALL_PAGE_SIZE, offset: page * FETCH_ALL_PAGE_SIZE });
     all.push(...items);
     if (items.length < FETCH_ALL_PAGE_SIZE) break;
+    onPage?.([...all]);
   }
   return all;
 }
+
+/** Called with everything loaded so far whenever more pages are still to come. */
+export type OnPage<T> = (loadedSoFar: T[]) => void;
 
 /** "Client 2" before "Client 10", locale-aware. */
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 export const sortByName = <T extends { name: string }>(items: T[]): T[] =>
   [...items].sort((a, b) => collator.compare(a.name, b.name));
+
+const fetchAllSorted = async <T extends { name: string }>(
+  fetchPage: (params: PageParams) => Promise<T[]>,
+  onPage?: OnPage<T>,
+): Promise<T[]> => sortByName(await fetchAll(fetchPage, {}, onPage && ((items) => onPage(sortByName(items)))));
 
 export const api = {
   listClients: (p: PageParams = {}) => request<Client[]>('/clients', { query: { ...p } }),
@@ -43,9 +53,10 @@ export const api = {
   deleteTimeEntry: (id: number) =>
     request<{ message: string }>(`/time-entries/${id}`, { method: 'DELETE' }),
 
-  allClients: async () => sortByName(await fetchAll((p) => api.listClients(p))),
-  allProjects: async (clientId: number) => sortByName(await fetchAll((p) => api.listProjects(clientId, p))),
-  allTasks: async (projectId: number) => sortByName(await fetchAll((p) => api.listTasks(projectId, p))),
+  allClients: (onPage?: OnPage<Client>) => fetchAllSorted((p) => api.listClients(p), onPage),
+  allProjects: (clientId: number, onPage?: OnPage<Project>) =>
+    fetchAllSorted((p) => api.listProjects(clientId, p), onPage),
+  allTasks: (projectId: number, onPage?: OnPage<Task>) => fetchAllSorted((p) => api.listTasks(projectId, p), onPage),
 };
 
 export const queryKeys = {

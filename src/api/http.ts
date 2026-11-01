@@ -139,6 +139,14 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
   }
 }
 
+/**
+ * Retrying 4xx answers never helps, and every retry spends the 15 req/min budget.
+ * 429s are already retried in `request`; retry network/5xx once. Cancelled stays cancelled.
+ */
+export function shouldRetryQuery(failureCount: number, err: unknown): boolean {
+  return failureCount < 1 && (!(err instanceof ApiError) || err.kind === 'network' || err.status >= 500);
+}
+
 export interface ErrorDescription {
   title: string;
   detail?: string;

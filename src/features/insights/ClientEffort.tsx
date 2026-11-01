@@ -6,7 +6,7 @@ import { aggregateByClient } from '../../lib/clientEffort';
 import { matchTasksToClients, type MatchProgress } from '../../lib/matchTasks';
 import { useTaskDirectory } from '../../lib/taskDirectory';
 import { formatMinutes } from '../../lib/timeParse';
-import { ErrorNotice, Spinner } from '../../components/Feedback';
+import { ErrorNotice, PartialStatus, Spinner } from '../../components/Feedback';
 
 const COLLAPSED_ROWS = 6;
 
@@ -61,12 +61,14 @@ export function ClientEffort() {
         </div>
       </header>
 
-      {entries.isPending ? (
-        <div className="loading-row">
-          <Spinner /> Adding up your time…
-        </div>
-      ) : entries.isError ? (
-        <ErrorNotice compact error={entries.error} onRetry={() => entries.refetch()} />
+      {!entries.data ? (
+        entries.isError ? (
+          <ErrorNotice compact error={entries.error} onRetry={() => entries.refetch()} />
+        ) : (
+          <div className="loading-row">
+            <Spinner /> Adding up your time…
+          </div>
+        )
       ) : !entries.data.length ? (
         <p className="muted">No time logged yet. Totals per client appear here once you log time.</p>
       ) : (
@@ -145,6 +147,7 @@ export function ClientEffort() {
           )}
         </>
       )}
+      <PartialStatus query={entries} label="more entries" />
     </section>
   );
 }

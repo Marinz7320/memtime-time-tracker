@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { useClients, useProjects, useTask, useTasks } from '../../api/hooks';
 import { flattenTree, buildTaskTree } from '../../lib/taskTree';
 import { useTaskDirectory } from '../../lib/taskDirectory';
-import { Spinner } from '../../components/Feedback';
+import { ErrorNotice, Spinner } from '../../components/Feedback';
 import { describeError } from '../../api/http';
 
 interface Props {
@@ -32,6 +32,7 @@ export function TaskPicker({ value, onChange, error }: Props) {
   const project = projects.data?.find((p) => p.id === projectId);
   const tasks = useTasks(project, client, choosing && !!project);
   const options = useMemo(() => flattenTree(buildTaskTree(tasks.data ?? [])), [tasks.data]);
+  const failed = [clients, projects, tasks].find((q) => q.isError && !q.isFetching);
 
   // Only one project for this client? Choose it for the user.
   useEffect(() => {
@@ -109,7 +110,7 @@ export function TaskPicker({ value, onChange, error }: Props) {
           }}
         >
           <option value="">
-            {!clientId ? 'Choose a client first' : projects.isPending ? 'Loading projects…' : projects.data?.length ? 'Choose a project' : 'No projects for this client'}
+            {!clientId ? 'Choose a client first' : projects.data?.length ? 'Choose a project' : projects.isError ? 'Projects not loaded' : projects.isPending ? 'Loading projects…' : 'No projects for this client'}
           </option>
           {projects.data?.map((p) => (
             <option key={p.id} value={p.id}>
@@ -135,7 +136,7 @@ export function TaskPicker({ value, onChange, error }: Props) {
           }}
         >
           <option value="">
-            {!project ? 'Choose a project first' : tasks.isPending ? 'Loading tasks…' : options.length ? 'Choose a task' : 'No tasks in this project'}
+            {!project ? 'Choose a project first' : options.length ? 'Choose a task' : tasks.isError ? 'Tasks not loaded' : tasks.isPending ? 'Loading tasks…' : 'No tasks in this project'}
           </option>
           {options.map(({ task, depth }) => (
             <option key={task.id} value={task.id}>
@@ -146,10 +147,8 @@ export function TaskPicker({ value, onChange, error }: Props) {
         </select>
       </div>
 
-      {(clients.isError || projects.isError || tasks.isError) && (
-        <p className="field-error" role="alert">
-          {describeError(clients.error ?? projects.error ?? tasks.error).title}. Close the form and try again.
-        </p>
+      {failed && (
+        <ErrorNotice compact error={failed.error} onRetry={() => failed.refetch()} partial={failed.data !== undefined} />
       )}
       {error && (
         <p id={ids.err} className="field-error">

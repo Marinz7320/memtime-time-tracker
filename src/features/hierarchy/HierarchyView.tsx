@@ -4,7 +4,7 @@ import { useClients, useProjects, useTasks } from '../../api/hooks';
 import { queryKeys } from '../../api/endpoints';
 import type { Client, Project, Task } from '../../api/types';
 import { buildTaskTree, countTasks, type TaskNode } from '../../lib/taskTree';
-import { EmptyState, ErrorNotice, Spinner, StatusBadge } from '../../components/Feedback';
+import { EmptyState, ErrorNotice, PartialStatus, Spinner, StatusBadge } from '../../components/Feedback';
 import { ClientEffort } from '../insights/ClientEffort';
 
 interface Props {
@@ -94,12 +94,14 @@ export function HierarchyView({ onLogTime }: Props) {
             <p className="hint">Search covers everything loaded so far. Use Expand all to search every project and task.</p>
           )}
 
-          {clients.isPending ? (
-            <div className="loading-row">
-              <Spinner /> Loading clients…
-            </div>
-          ) : clients.isError ? (
-            <ErrorNotice error={clients.error} onRetry={() => clients.refetch()} />
+          {!clients.data ? (
+            clients.isError ? (
+              <ErrorNotice error={clients.error} onRetry={() => clients.refetch()} />
+            ) : (
+              <div className="loading-row">
+                <Spinner /> Loading clients…
+              </div>
+            )
           ) : !clients.data.length ? (
             <EmptyState title="No clients yet">Clients created in your account will appear here.</EmptyState>
           ) : !visibleClients.length ? (
@@ -120,6 +122,7 @@ export function HierarchyView({ onLogTime }: Props) {
               ))}
             </ul>
           )}
+          <PartialStatus query={clients} label="more clients" />
         </div>
         <aside className="clients-layout__side">
           <ClientEffort />
@@ -180,13 +183,15 @@ function ClientNode({ client, ...rest }: NodeProps & { client: Client }) {
       </button>
       {open && (
         <ul role="group" className="tree__children">
-          {projects.isPending ? (
+          {!projects.data ? (
             <li className="tree__status">
-              <Spinner /> Loading projects…
-            </li>
-          ) : projects.isError ? (
-            <li className="tree__status">
-              <ErrorNotice compact error={projects.error} onRetry={() => projects.refetch()} />
+              {projects.isError ? (
+                <ErrorNotice compact error={projects.error} onRetry={() => projects.refetch()} />
+              ) : (
+                <>
+                  <Spinner /> Loading projects…
+                </>
+              )}
             </li>
           ) : !projects.data.length ? (
             <li className="tree__status muted">No projects for this client.</li>
@@ -195,6 +200,7 @@ function ClientNode({ client, ...rest }: NodeProps & { client: Client }) {
               <ProjectNode key={p.id} project={p} client={client} parentMatched={showAll} {...rest} />
             ))
           )}
+          <PartialStatus as="li" query={projects} label="more projects" />
         </ul>
       )}
     </li>
@@ -230,13 +236,15 @@ function ProjectNode({
       </button>
       {open && (
         <ul role="group" className="tree__children">
-          {tasks.isPending ? (
+          {!tasks.data ? (
             <li className="tree__status">
-              <Spinner /> Loading tasks…
-            </li>
-          ) : tasks.isError ? (
-            <li className="tree__status">
-              <ErrorNotice compact error={tasks.error} onRetry={() => tasks.refetch()} />
+              {tasks.isError ? (
+                <ErrorNotice compact error={tasks.error} onRetry={() => tasks.refetch()} />
+              ) : (
+                <>
+                  <Spinner /> Loading tasks…
+                </>
+              )}
             </li>
           ) : !tree.length ? (
             <li className="tree__status muted">No tasks in this project.</li>
@@ -245,6 +253,7 @@ function ProjectNode({
               <TaskItem key={n.task.id} node={n} q={selfMatch ? '' : q} onLogTime={onLogTime} />
             ))
           )}
+          <PartialStatus as="li" query={tasks} label="more tasks" />
         </ul>
       )}
     </li>

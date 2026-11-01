@@ -68,4 +68,13 @@ describe('fetchAll', () => {
       [50, 100],
     ]);
   });
+
+  it('reports what has loaded after each page that has more to come', async () => {
+    const data = Array.from({ length: 120 }, (_, i) => i);
+    const seen: number[] = [];
+    await fetchAll(async ({ limit = 0, offset = 0 }) => data.slice(offset, offset + limit), {}, (loaded) =>
+      seen.push(loaded.length),
+    );
+    expect(seen).toEqual([50, 100]);
+  });
 });

@@ -1,31 +1,61 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, fetchAll, queryKeys } from './endpoints';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+  type QueryFunctionContext,
+  type QueryKey,
+} from '@tanstack/react-query';
+import { api, fetchAll, queryKeys, type OnPage } from './endpoints';
 import { ApiError } from './http';
-import type { Client, PageParams, Project, TimeEntry, TimeEntryInput } from './types';
+import type { Client, PageParams, Project, Task, TimeEntry, TimeEntryInput } from './types';
 import { recordTasks } from '../lib/taskDirectory';
 
 /** Clients/projects/tasks change rarely; cache them generously to protect the 15 req/min budget. */
 const HIERARCHY_STALE = 5 * 60_000;
 
+/**
+ * Publish each page as it arrives, so long lists fill in instead of showing a spinner.
+ * If loading then stops, the query is in its error state but keeps this data: that
+ * combination means "partial", and the UI shows the rows with a way to load the rest.
+ * A reload of a longer list never shrinks what's on screen; it swaps in when complete.
+ */
+function publishPages<T>(client: QueryClient, queryKey: QueryKey): OnPage<T> {
+  return (loaded) => {
+    const current = client.getQueryData<T[]>(queryKey);
+    if (!current || loaded.length > current.length) client.setQueryData(queryKey, loaded);
+  };
+}
+
 /** Query options shared by the hooks and by code that prefetches (e.g. matching tasks to clients). */
-export const clientsQuery = () => ({ queryKey: queryKeys.clients, queryFn: api.allClients, staleTime: HIERARCHY_STALE });
+export const clientsQuery = () => ({
+  queryKey: queryKeys.clients,
+  queryFn: ({ client, queryKey }: QueryFunctionContext) => api.allClients(publishPages(client, queryKey)),
+  staleTime: HIERARCHY_STALE,
+});
 
 export const projectsQuery = (clientId: number) => ({
   queryKey: queryKeys.projects(clientId),
-  queryFn: () => api.allProjects(clientId),
+  queryFn: ({ client, queryKey }: QueryFunctionContext) => api.allProjects(clientId, publishPages(client, queryKey)),
   staleTime: HIERARCHY_STALE,
 });
 
 export const tasksQuery = (project: Project, client: Client) => ({
   queryKey: queryKeys.tasks(project.id),
-  queryFn: async () => {
-    const tasks = await api.allTasks(project.id);
-    recordTasks(tasks, {
+  queryFn: async ({ client: queryClient, queryKey }: QueryFunctionContext) => {
+    const path = {
       projectId: project.id,
       projectName: project.name,
       clientId: client.id,
       clientName: client.name,
+    };
+    const publish = publishPages<Task>(queryClient, queryKey);
+    const tasks = await api.allTasks(project.id, (loaded) => {
+      recordTasks(loaded, path);
+      publish(loaded);
     });
+    recordTasks(tasks, path);
     return tasks;
   },
   staleTime: HIERARCHY_STALE,
@@ -99,7 +129,8 @@ export function useDeleteTimeEntry() {
 export function useAllTimeEntries() {
   return useQuery({
     queryKey: [...queryKeys.timeEntries, 'all'] as const,
-    queryFn: () => fetchAll((p) => api.listTimeEntries(p), { sortBy: 'id', order: 'asc' }),
+    queryFn: ({ client, queryKey }) =>
+      fetchAll((p) => api.listTimeEntries(p), { sortBy: 'id', order: 'asc' }, publishPages(client, queryKey)),
     staleTime: 60_000,
   });
 }
