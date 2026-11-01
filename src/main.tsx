@@ -11,7 +11,8 @@ const queryClient = new QueryClient({
     queries: {
       // Retrying 4xx answers never helps, and every retry spends the 15 req/min budget.
       // 429s are already retried inside the HTTP client; retry network/5xx once.
-      retry: (count, err) => count < 1 && (!(err instanceof ApiError) || err.status === 0 || err.status >= 500),
+      // A cancelled request must stay cancelled.
+      retry: (count, err) => count < 1 && (!(err instanceof ApiError) || err.kind === 'network' || err.status >= 500),
       refetchOnWindowFocus: false,
     },
   },

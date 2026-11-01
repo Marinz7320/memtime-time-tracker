@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { rateLimiter } from '../api/http';
+import { cancelPendingRequests, rateLimiter } from '../api/http';
 
 let snapshot = rateLimiter.getState();
 const subscribe = (cb: () => void) =>
@@ -10,7 +10,7 @@ const subscribe = (cb: () => void) =>
 
 /**
  * Shown only while requests are waiting for the API's 15-per-minute window,
- * so a slow screen is explained instead of looking broken.
+ * so a slow screen is explained instead of looking broken, and the user can stop waiting.
  */
 export function RateLimitBanner() {
   const state = useSyncExternalStore(subscribe, () => snapshot);
@@ -28,8 +28,18 @@ export function RateLimitBanner() {
   return (
     <div className="ratelimit" role="status">
       <span className="ratelimit__pulse" aria-hidden />
-      Waiting for the API limit (15 requests per minute). {state.queued}{' '}
-      {state.queued === 1 ? 'request' : 'requests'} will continue in {seconds}s.
+      <span className="ratelimit__text">
+        Waiting for the API limit (15 requests per minute). {state.queued}{' '}
+        {state.queued === 1 ? 'request' : 'requests'} will continue in {seconds}s.
+      </span>
+      <button
+        type="button"
+        className="btn btn--sm"
+        onClick={() => cancelPendingRequests()}
+        aria-label={`Cancel ${state.queued} waiting ${state.queued === 1 ? 'request' : 'requests'}`}
+      >
+        Cancel
+      </button>
     </div>
   );
 }

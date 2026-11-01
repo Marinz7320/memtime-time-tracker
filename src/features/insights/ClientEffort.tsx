@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAllTimeEntries } from '../../api/hooks';
+import { ApiError, cancelPendingRequests } from '../../api/http';
 import { aggregateByClient } from '../../lib/clientEffort';
 import { matchTasksToClients, type MatchProgress } from '../../lib/matchTasks';
 import { useTaskDirectory } from '../../lib/taskDirectory';
@@ -20,6 +21,7 @@ export function ClientEffort() {
   const [showAll, setShowAll] = useState(false);
   const [progress, setProgress] = useState<MatchProgress | null>(null);
   const [matching, setMatching] = useState(false);
+  const [matchError, setMatchError] = useState<unknown>(null);
   const abort = useRef<AbortController | null>(null);
 
   const effort = useMemo(() => aggregateByClient(entries.data ?? [], directory), [entries.data, directory]);
@@ -30,11 +32,20 @@ export function ClientEffort() {
   const startMatching = async () => {
     abort.current = new AbortController();
     setMatching(true);
+    setMatchError(null);
     try {
       await matchTasksToClients(qc, effort.unmatched.taskIds, { onProgress: setProgress, signal: abort.current.signal });
+    } catch (err) {
+      // Cancelling is the user's choice, not a failure.
+      if (!(err instanceof ApiError && err.kind === 'cancelled')) setMatchError(err);
     } finally {
       setMatching(false);
     }
+  };
+
+  const stopMatching = () => {
+    abort.current?.abort();
+    cancelPendingRequests();
   };
 
   return (
@@ -112,7 +123,7 @@ export function ClientEffort() {
                     Checked {progress?.clientsChecked ?? 0} of {progress?.clientsTotal ?? '…'} clients. The API allows
                     15 requests a minute, so this can take a while; results are saved for next time.
                   </span>
-                  <button type="button" className="btn btn--sm" onClick={() => abort.current?.abort()}>
+                  <button type="button" className="btn btn--sm" onClick={stopMatching}>
                     Stop
                   </button>
                 </div>
@@ -123,6 +134,7 @@ export function ClientEffort() {
                     : 'Match tasks to clients'}
                 </button>
               )}
+              {!matching && matchError != null && <ErrorNotice compact error={matchError} />}
               {!matching && progress && progress.clientsChecked >= progress.clientsTotal && progress.remaining > 0 && (
                 <p className="muted">
                   {progress.remaining} {progress.remaining === 1 ? 'task wasn’t' : 'tasks weren’t'} found under any

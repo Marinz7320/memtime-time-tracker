@@ -6,7 +6,7 @@ export const API_PREFIX = '/api/v1';
 /** API allows 15 requests / 60 s per key. */
 export const rateLimiter = new RateLimiter(15, 60_000);
 
-export type ApiErrorKind = 'http' | 'network' | 'parse';
+export type ApiErrorKind = 'http' | 'network' | 'parse' | 'cancelled';
 
 export class ApiError extends Error {
   constructor(
@@ -38,10 +38,36 @@ export function buildUrl(path: string, query?: RequestOptions['query']): string 
   return `${API_PREFIX}${path}${qs ? `?${qs}` : ''}`;
 }
 
+/** Reads a header holding a non-negative number; null when it is missing or malformed. */
+function numberHeader(res: Response, name: string): number | null {
+  const header = res.headers.get(name);
+  const value = header ? Number(header) : NaN;
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
 function retryAfterMs(res: Response, fallback: number): number {
-  const header = res.headers.get('Retry-After');
-  const seconds = header ? Number(header) : NaN;
-  return Number.isFinite(seconds) && seconds > 0 ? seconds * 1000 : fallback;
+  const seconds = numberHeader(res, 'Retry-After') || numberHeader(res, 'RateLimit-Reset');
+  return seconds ? seconds * 1000 : fallback;
+}
+
+function syncRateLimit(res: Response): void {
+  const remaining = numberHeader(res, 'RateLimit-Remaining');
+  const resetSeconds = numberHeader(res, 'RateLimit-Reset');
+  if (remaining !== null && resetSeconds !== null) rateLimiter.syncWithServer(remaining, resetSeconds * 1000);
+}
+
+const cancelledError = () => new ApiError(0, undefined, 'cancelled');
+
+/** Reads on the wire. Writes aren't tracked: aborting one would leave its outcome unknown. */
+const readsInFlight = new Set<AbortController>();
+
+/**
+ * Stop all waiting: drop every queued request (none of them were sent) and abort reads
+ * on the wire. Each caller gets a 'cancelled' ApiError, so loading states end immediately.
+ */
+export function cancelPendingRequests(): void {
+  rateLimiter.cancelQueued(cancelledError);
+  readsInFlight.forEach((c) => c.abort());
 }
 
 async function readBody(res: Response): Promise<unknown> {
@@ -59,31 +85,42 @@ export async function request<T>(path: string, opts: RequestOptions = {}): Promi
   const url = buildUrl(path, query);
 
   for (let attempt = 0; ; attempt++) {
-    await rateLimiter.acquire();
+    await rateLimiter.acquire({ signal, urgent: method !== 'GET' });
     signal?.throwIfAborted();
 
+    const controller = new AbortController();
+    const forwardAbort = () => controller.abort();
+    signal?.addEventListener('abort', forwardAbort, { once: true });
+    if (method === 'GET') readsInFlight.add(controller);
+
     let res: Response;
+    let data: unknown;
     try {
       res = await fetch(url, {
         method,
-        signal,
+        signal: controller.signal,
         headers: {
           Accept: 'application/json',
           ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
         },
         body: body !== undefined ? JSON.stringify(body) : undefined,
       });
+      data = await readBody(res);
     } catch (err) {
-      if ((err as Error)?.name === 'AbortError') throw err;
+      if (signal?.aborted) throw err;
+      if (controller.signal.aborted) throw cancelledError();
       throw new ApiError(0, undefined, 'network');
+    } finally {
+      signal?.removeEventListener('abort', forwardAbort);
+      readsInFlight.delete(controller);
     }
+
+    syncRateLimit(res);
 
     if (res.status === 429 && attempt < MAX_429_RETRIES) {
       rateLimiter.penalize(retryAfterMs(res, rateLimiter.windowMs));
       continue;
     }
-
-    const data = await readBody(res);
 
     if (!res.ok) {
       const message =
@@ -114,6 +151,11 @@ export function describeError(err: unknown, context?: { entryId?: number }): Err
   }
   const msg = err.serverMessage;
   switch (true) {
+    case err.kind === 'cancelled':
+      return {
+        title: 'Request cancelled',
+        detail: 'It was stopped before it finished, so nothing was changed. Try again when you’re ready.',
+      };
     case err.kind === 'network':
       return {
         title: 'Can’t reach the server',

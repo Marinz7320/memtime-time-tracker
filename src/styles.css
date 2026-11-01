@@ -434,6 +434,10 @@ kbd {
   font-size: 0.9rem;
   width: calc(100% - 48px);
 }
+.ratelimit__text {
+  flex: 1;
+  min-width: 0;
+}
 .ratelimit__pulse {
   width: 8px;
   height: 8px;
