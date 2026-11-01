@@ -46,7 +46,14 @@ describe('DatePicker', () => {
     expect(screen.getByRole('dialog')).toBeTruthy();
     expect(screen.getByRole('grid')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Next month' }));
-    fireEvent.click(screen.getByRole('button', { name: /February 3, 2026|3 February 2026/ }));
+    // Day labels follow the runtime locale, so build the expected name the same way.
+    const feb3 = new Intl.DateTimeFormat(undefined, {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(new Date(2026, 1, 3));
+    fireEvent.click(screen.getByRole('button', { name: feb3 }));
     expect(value()).toBe('2026-02-03');
     expect(screen.queryByRole('dialog')).toBeNull();
   });
